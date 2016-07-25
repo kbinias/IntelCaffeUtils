@@ -145,6 +145,67 @@ def compute_timediff(arr):
 
   return avg_timedelta_arr # Avarage time delta for each rank
 
+def file_creator_csv(program_mode, file_out_name, arr):
+
+  print("Dump data to output file")
+
+  file_out = open(file_out_name, "w")
+
+  # Single process with loss and time diff
+  if program_mode == 'single':
+    # File header
+    if timedelta_format == "m":
+      file_out.write("#Rank;Iteration;Time;Loss;TimeDiff(min)\n")
+    elif timedelta_format == "h":
+      file_out.write("#Rank;Iteration;Time;Loss;TimeDiff(hour)\n")
+    else:
+      file_out.write("#Rank;Iteration;Time;Loss;TimeDiff(sec)\n")
+
+    for idx, row in enumerate(arr):
+      if idx == 0: continue
+      str_out = "%s;%s;%s;%s;%s" % (row[0], row[1], row[2], row[3], row[4])
+      file_out.write(str_out + "\n")
+
+  elif program_mode == 'loss': # All procesess with loss
+
+    changed_rank_idxs = get_changed_rank_idxs(arr)
+
+    file_out.write("#Iteration")
+    for idx in changed_rank_idxs:
+      file_out.write(";R-" + arr[idx][0])
+    file_out.write("\n")
+
+    # Fill row
+    for idx in range(0,changed_rank_idxs[1]):
+      if idx == 0: continue # Skip first iterations
+      file_out.write(arr[idx][1])
+
+      for val in changed_rank_idxs:
+        file_out.write(";" + arr[val + idx][3])
+
+      file_out.write("\n")
+
+  elif program_mode == 'timediff': # All procesess with time diff
+
+    changed_rank_idxs = get_changed_rank_idxs(arr)
+
+    file_out.write("#Iteration")
+    for idx in changed_rank_idxs:
+      file_out.write(";R-" + arr[idx][0])
+    file_out.write("\n")
+
+    # Fill row
+    for idx in range(0,changed_rank_idxs[1]):
+      if idx == 0: continue # Skip first iterations
+      file_out.write(arr[idx][1])
+
+      for val in changed_rank_idxs:
+        file_out.write(";" + str(arr[val + idx][4]))
+
+      file_out.write("\n")
+
+  file_out.close()
+
 ######################################################################################
 
 program_mode, file_in_name, process_ids, not_smaller_then_iters, timedelta_format = get_args(sys.argv)
@@ -200,97 +261,43 @@ if program_mode == 'single':
   file_out_name = file_name + "_single_" + arr[0][0] + ".csv"
 
   print("Compute time diff")
-  compute_timediff(arr)
+  avg_timedelta_arr = compute_timediff(arr)
 
-  num_rows = len(arr)
-  print("Dump data to output file (num rows:%s)" % (num_rows))
-
-  # Dump to file
-  file_out = open(file_out_name, "w")
-
-  if timedelta_format == "m":
-    file_out.write("#Rank;Iteration;Time;Loss;TimeDiff(min)\n")
-  elif timedelta_format == "h":
-    file_out.write("#Rank;Iteration;Time;Loss;TimeDiff(hour)\n")
-  else:
-    file_out.write("#Rank;Iteration;Time;Loss;TimeDiff(sec)\n")
-
-  for idx, row in enumerate(arr):
-    if idx == 0: continue
-    str_out = "%s;%s;%s;%s;%s" % (row[0], row[1], row[2], row[3], row[4])
-    file_out.write(str_out + "\n")
-
-  file_out.close()
+  file_creator_csv(program_mode, file_out_name, arr)
 
   print("Summary:")
-  print("Start time: %s" % (start_time))
-  print("End time: %s" % (last_time))
-  print("Total time: %s (hour)" % ( format( ((arr[len(arr)-1][2] - start_time).total_seconds() / 3600.0) , '.2f' ) ))
+  print("   Start time: %s" % (start_time))
+  print("   End time: %s" % (last_time))
+  print("   Total time: %s (hour)" % ( format( ((arr[len(arr)-1][2] - start_time).total_seconds() / 3600.0) , '.2f' ) ))
+  print("   Average iter group time: %s" % (avg_timedelta_arr))
+  print("   Number of records: %s" % (len(arr)))
 
 elif program_mode == 'loss': # All procesess with loss
 
   file_name, file_ext = os.path.splitext(file_in_name)
   file_out_name = file_name + "_loss.csv"
-  file_out = open(file_out_name, "w")
 
-  changed_rank_idxs = get_changed_rank_idxs(arr)
-
-  # File header
-  file_out.write("#Iteration")
-  for idx in changed_rank_idxs:
-    file_out.write(";" + arr[idx][0])
-  file_out.write("\n")
-
-  # Fill row
-  for idx in range(0,changed_rank_idxs[1]):
-    if idx == 0: continue # Skip first iterations
-    file_out.write(arr[idx][1])
-
-    for val in changed_rank_idxs:
-      file_out.write(";" + arr[val + idx][3])
-
-    file_out.write("\n")
-
-  file_out.close()
+  file_creator_csv(program_mode, file_out_name, arr)
 
   print("Summary:")
-  print("Start time: %s" % (start_time))
-  print("End time: %s" % (arr[len(arr)-1][2]))
-  print("Total time: %s (hour)" % ( format( ((arr[len(arr)-1][2] - start_time).total_seconds() / 3600.0) , '.2f' ) ))
+  print("   Start time: %s" % (start_time))
+  print("   End time: %s" % (arr[len(arr)-1][2]))
+  print("   Total time: %s (hour)" % ( format( ((arr[len(arr)-1][2] - start_time).total_seconds() / 3600.0) , '.2f' ) ))
 
 elif program_mode == 'timediff': # All procesess with time diff
 
   file_name, file_ext = os.path.splitext(file_in_name)
   file_out_name = file_name + "_timediff.csv"
-  file_out = open(file_out_name, "w")
-
-  changed_rank_idxs = get_changed_rank_idxs(arr)
 
   print("Compute time diff")
   avg_timedelta_arr = compute_timediff(arr)
 
-  # File header
-  file_out.write("#Iteration")
-  for idx in changed_rank_idxs:
-    file_out.write(";" + arr[idx][0])
-  file_out.write("\n")
-
-  # Fill row
-  for idx in range(0,changed_rank_idxs[1]):
-    if idx == 0: continue # Skip first iterations
-    file_out.write(arr[idx][1])
-
-    for val in changed_rank_idxs:
-      file_out.write(";" + str(arr[val + idx][4]))
-
-    file_out.write("\n")
-
-  file_out.close()
+  file_creator_csv(program_mode, file_out_name, arr)
 
   print("Summary:")
-  print("Start time: %s" % (start_time))
-  print("End time: %s" % (arr[len(arr)-1][2]))
-  print("Total time: %s (hour)" % ( format( ((arr[len(arr)-1][2] - start_time).total_seconds() / 3600.0) , '.2f' ) ))
-  print("Average iter group time for each rank: %s" % (avg_timedelta_arr))
+  print("   Start time: %s" % (start_time))
+  print("   End time: %s" % (arr[len(arr)-1][2]))
+  print("   Total time: %s (hour)" % ( format( ((arr[len(arr)-1][2] - start_time).total_seconds() / 3600.0) , '.2f' ) ))
+  print("   Average iter group time for each rank: %s" % (avg_timedelta_arr))
 
 print("Finish")
