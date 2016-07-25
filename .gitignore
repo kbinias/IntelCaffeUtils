@@ -1,0 +1,6 @@
+## General
+
+# Skip files
+*.log
+*.out
+*.csv
