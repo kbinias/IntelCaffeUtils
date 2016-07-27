@@ -18,6 +18,13 @@ def prepare_line(line_str):
   line_str = line_str.replace(",", "")
   line_str = line_str.replace("=", "")
   line_str = line_str.replace("I", str(datetime.now().year), 1)
+
+  #[23] I0727 08:27:16.101341  1931 solver.cpp:241] [23] Iteration 72480, loss = 2.84437
+  # Remove first duplicated rank
+  if line_str.count('[') == 2:
+    endpos = line.find('I')
+    line_str = line_str[endpos:]
+
   return line_str
 
 def get_time(vals):
@@ -69,7 +76,7 @@ def get_params(line, vals):
     iter = vals[5]
     loss = vals[7]
 
-  return time, rank, iter, loss
+  return time, int(rank), int(iter), float(loss)
 
 def get_args(argv):
   program_mode = None
@@ -172,16 +179,16 @@ def file_creator_csv(program_mode, file_out_name, arr):
 
     file_out.write("#Iteration")
     for idx in changed_rank_idxs:
-      file_out.write(";R-" + arr[idx][0])
+      file_out.write(";R-" + str(arr[idx][0]))
     file_out.write("\n")
 
     # Fill row
     for idx in range(0,changed_rank_idxs[1]):
       if idx == 0: continue # Skip first iterations
-      file_out.write(arr[idx][1])
+      file_out.write(str(arr[idx][1]))
 
       for val in changed_rank_idxs:
-        file_out.write(";" + arr[val + idx][3])
+        file_out.write(";" + str(arr[val + idx][3]))
 
       file_out.write("\n")
 
@@ -191,13 +198,13 @@ def file_creator_csv(program_mode, file_out_name, arr):
 
     file_out.write("#Iteration")
     for idx in changed_rank_idxs:
-      file_out.write(";R-" + arr[idx][0])
+      file_out.write(";R-" + str(arr[idx][0]))
     file_out.write("\n")
 
     # Fill row
     for idx in range(0,changed_rank_idxs[1]):
       if idx == 0: continue # Skip first iterations
-      file_out.write(arr[idx][1])
+      file_out.write(str(arr[idx][1]))
 
       for val in changed_rank_idxs:
         file_out.write(";" + str(arr[val + idx][4]))
@@ -222,12 +229,13 @@ with open(file_in_name, "r") as file_in:
   for line in file_in:
 
     #[0] I0719 07:09:31.850666 18289 solver.cpp:239] Iteration 6680, loss = 6.40777
+    #[23] I0727 08:27:16.101341  1931 solver.cpp:241] [23] Iteration 72480, loss = 2.84437
     #I0722 01:18:31.942049 21188 solver.cpp:241] [3] Iteration 25720, loss = 11.0501
     #I0722 01:18:31.942049 21188 solver.cpp:241] Iteration 25720, loss = 11.0501
     line = prepare_line(line)
 
     vals = line.split()
-
+    
     if len(vals) < 8:
       continue
 
@@ -254,6 +262,8 @@ print("Sort data")
 # Sort: Rank Time
 arr = sorted(arr, key=operator.itemgetter(0, 2))
 
+last_time = arr[len(arr)-1][2]
+
 # Single process with loss and time diff
 if program_mode == 'single':
 
@@ -268,7 +278,7 @@ if program_mode == 'single':
   print("Summary:")
   print("   Start time: %s" % (start_time))
   print("   End time: %s" % (last_time))
-  print("   Total time: %s (hour)" % ( format( ((arr[len(arr)-1][2] - start_time).total_seconds() / 3600.0) , '.2f' ) ))
+  print("   Total time: %s (hour)" % ( format( ((last_time - start_time).total_seconds() / 3600.0) , '.2f' ) ))
   print("   Average iter group time: %s" % (avg_timedelta_arr))
   print("   Number of records: %s" % (len(arr)))
 
@@ -281,8 +291,8 @@ elif program_mode == 'loss': # All procesess with loss
 
   print("Summary:")
   print("   Start time: %s" % (start_time))
-  print("   End time: %s" % (arr[len(arr)-1][2]))
-  print("   Total time: %s (hour)" % ( format( ((arr[len(arr)-1][2] - start_time).total_seconds() / 3600.0) , '.2f' ) ))
+  print("   End time: %s" % (last_time))
+  print("   Total time: %s (hour)" % ( format( ((last_time - start_time).total_seconds() / 3600.0) , '.2f' ) ))
 
 elif program_mode == 'timediff': # All procesess with time diff
 
@@ -296,8 +306,8 @@ elif program_mode == 'timediff': # All procesess with time diff
 
   print("Summary:")
   print("   Start time: %s" % (start_time))
-  print("   End time: %s" % (arr[len(arr)-1][2]))
-  print("   Total time: %s (hour)" % ( format( ((arr[len(arr)-1][2] - start_time).total_seconds() / 3600.0) , '.2f' ) ))
+  print("   End time: %s" % (last_time))
+  print("   Total time: %s (hour)" % ( format( ((last_time - start_time).total_seconds() / 3600.0) , '.2f' ) ))
   print("   Average iter group time for each rank: %s" % (avg_timedelta_arr))
 
 print("Finish")
