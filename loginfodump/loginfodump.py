@@ -89,7 +89,7 @@ def get_args(argv):
   
   if program_mode == 'single': # loginfodump.py single input_log_file process_id not_smaller_then_iters time_unit(s,m,h)
     file_in_name = argv[2]
-    process_ids = map(int, argv[3].split())
+    process_ids = list(map(int, argv[3].split()))
     not_smaller_then_iters = int(argv[4])
     timedelta_format = argv[5]
   elif program_mode == 'loss': # loginfodump.py loss input_log_file not_smaller_then_iters
