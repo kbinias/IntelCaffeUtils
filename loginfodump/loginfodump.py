@@ -89,7 +89,7 @@ def get_args(argv):
   
   if program_mode == 'single': # loginfodump.py single input_log_file process_id not_smaller_then_iters time_unit(s,m,h)
     file_in_name = argv[2]
-    process_ids = argv[3].split(",")
+    process_ids = map(int, argv[3].split())
     not_smaller_then_iters = int(argv[4])
     timedelta_format = argv[5]
   elif program_mode == 'loss': # loginfodump.py loss input_log_file not_smaller_then_iters
@@ -257,6 +257,10 @@ with open(file_in_name, "r") as file_in:
     arr_row = [ rank, iter, last_time, loss ]
     arr.append(arr_row)
 
+if len(arr) == 0:
+	print("ERROR: Array is empty")
+	exit()
+
 print("Sort data")
 
 # Sort: Rank Time
@@ -268,7 +272,7 @@ last_time = arr[len(arr)-1][2]
 if program_mode == 'single':
 
   file_name, file_ext = os.path.splitext(file_in_name)
-  file_out_name = file_name + "_single_" + arr[0][0] + ".csv"
+  file_out_name = file_name + "_single_" + str(arr[0][0]) + ".csv"
 
   print("Compute time diff")
   avg_timedelta_arr = compute_timediff(arr)
