@@ -154,6 +154,8 @@ def format_time(seconds, format='hms'):
 # Update net params dictionary
 def update_train_params_dict(train_params_dict, vals):
 
+  if len(vals) == 0: return 1;
+
   if vals[0] == 'batch_size:' and train_params_dict.has_key('batch_size') == False:
     train_params_dict['batch_size'] = vals[1]
   elif vals[0] == 'momentum:' and train_params_dict.has_key('momentum') == False:
@@ -171,7 +173,7 @@ def update_train_params_dict(train_params_dict, vals):
   elif vals[0] == 'engine:' and train_params_dict.has_key('engine') == False:
     train_params_dict['engine'] = vals[1]
 
-  return 1
+  return 0
 
 def get_val_from_dict(dict, key):
   
