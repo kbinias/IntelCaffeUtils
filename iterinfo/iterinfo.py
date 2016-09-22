@@ -111,9 +111,10 @@ def compute_timediff(arr):
 
   for idx, row in enumerate(arr):
     if last_rank != row[0]:
-      row.append(0)
-      last_rank = row[0]
       if timedelta_count > 0: avg_timedelta_arr.append( timedelta_sum/timedelta_count )
+      row.append(row[0])
+      last_rank = row[0]
+      last_time = row[2]
       timedelta_sum = 0
       timedelta_count = 0
     else:
@@ -140,7 +141,7 @@ def explode_time(seconds):
 def format_time(seconds, format='hms'):
   
   h, m, s = explode_time(seconds)
-  
+
   if format == 'hms':
     return "%d:%02d:%02d" % (h, m, s)
   elif format == 'ms':
@@ -171,6 +172,13 @@ def update_train_params_dict(train_params_dict, vals):
     train_params_dict['engine'] = vals[1]
 
   return 1
+
+def get_val_from_dict(dict, key):
+  
+  if dict.has_key(key) == True:
+    return dict[key];
+
+  return "none"
 
 ######################################################################################
 
@@ -237,12 +245,17 @@ for file_in_name in file_list:
 
   formated_arr = []
   for idx, row in enumerate(avg_timedelta_arr):
-    formated_arr.append( format_time(seconds,'ms') )
+    formated_arr.append( format_time(row,'ms') )
 
   print("------------------------------------------------------------------")
   print("File name: %s" % (file_in_name))
-  print("Train params: engine: %s, batch_size: %s, base_lr: %s, shuffle: %s, momentum: %s, data_source: %s" % 
-         (train_params_dict['engine'], train_params_dict['batch_size'], train_params_dict['base_lr'], train_params_dict['shuffle'], train_params_dict['momentum'], train_params_dict['data_source']))
+  print("Train params: engine: %s, batch_size: %s, base_lr: %s, shuffle: %s, momentum: %s, data_source: %s" % (
+    get_val_from_dict(train_params_dict,'engine'), 
+    get_val_from_dict(train_params_dict,'batch_size'), 
+    get_val_from_dict(train_params_dict,'base_lr'), 
+    get_val_from_dict(train_params_dict,'shuffle'), 
+    get_val_from_dict(train_params_dict,'momentum'), 
+    get_val_from_dict(train_params_dict,'data_source')) )
   print("Start time: %s" % (start_time))
   print("End time: %s" % (last_time))
   print("Total time: %d:%02d:%02d" % (h, m, s))
