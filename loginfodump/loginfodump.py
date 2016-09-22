@@ -1,8 +1,12 @@
-#Usage:
-# loginfodump.py single input_log_file process_id not_smaller_then_iters time_unit(s,m,h)
-# loginfodump.py loss input_log_file not_smaller_then_iters
-# loginfodump.py timediff input_log_file not_smaller_then_iters m
-# program_mode: single - single process, loss - all procesess with loss, timediff - all procesess with time diff
+# Version 1.0
+# krzysztof.binias@intel.com
+
+# Usage:
+#  loginfodump.py single input_log_file process_id not_smaller_then_iters time_unit(s,m,h)
+#  loginfodump.py loss input_log_file not_smaller_then_iters
+#  loginfodump.py timediff input_log_file not_smaller_then_iters m
+#  loginfodump.py itertime input_log_file
+#  program_mode: single - single process, loss - all procesess with loss, timediff - all procesess with time diff, itertime - iters time
 
 import sys
 import os
@@ -58,6 +62,7 @@ def get_params(line, vals):
 
   if len(vals) < 8: return time, rank, iter, loss
   if line.find('Iteration') < 0: return time, rank, iter, loss
+  if line.find('loss') < 0: return time, rank, iter, loss
 
   time = get_time(vals)
 
@@ -82,8 +87,8 @@ def get_args(argv):
   program_mode = None
   file_in_name = None
   process_ids = None
-  not_smaller_then_iters = None
-  timedelta_format = None
+  not_smaller_then_iters = 10
+  timedelta_format = "m"
 
   program_mode = argv[1]
   
@@ -99,6 +104,8 @@ def get_args(argv):
     file_in_name = argv[2]
     not_smaller_then_iters = int(argv[3])
     timedelta_format = argv[4]
+  elif program_mode == 'itertime': # loginfodump.py itertime input_log_file
+    file_in_name = argv[2]
 
   return program_mode, file_in_name, process_ids, not_smaller_then_iters, timedelta_format
 
@@ -183,14 +190,21 @@ def file_creator_csv(program_mode, file_out_name, arr):
     file_out.write("\n")
 
     # Fill row
-    for idx in range(0,changed_rank_idxs[1]):
-      if idx == 0: continue # Skip first iterations
-      file_out.write(str(arr[idx][1]))
+    if( len(changed_rank_idxs) == 1 ):
+      for idx, row in enumerate(arr):
+        if idx == 0: continue # Skip first iterations
+        file_out.write(str(arr[idx][1]))
+        file_out.write(";" + str(arr[idx][3]))
+        file_out.write("\n")
+    else:
+      for idx in range(0,changed_rank_idxs[1]):
+        if idx == 0: continue # Skip first iterations
+        file_out.write(str(arr[idx][1]))
 
-      for val in changed_rank_idxs:
-        file_out.write(";" + str(arr[val + idx][3]))
+        for val in changed_rank_idxs:
+          file_out.write(";" + str(arr[val + idx][3]))
 
-      file_out.write("\n")
+        file_out.write("\n")
 
   elif program_mode == 'timediff': # All procesess with time diff
 
@@ -208,6 +222,33 @@ def file_creator_csv(program_mode, file_out_name, arr):
 
       for val in changed_rank_idxs:
         file_out.write(";" + str(arr[val + idx][4]))
+
+      file_out.write("\n")
+
+  elif program_mode == 'itertime': # All iters with time
+
+    changed_rank_idxs = get_changed_rank_idxs(arr)
+
+    file_out.write("#Iteration")
+    for idx in changed_rank_idxs:
+      file_out.write(";R-" + str(arr[idx][0]))
+    file_out.write("\n")
+
+    # Init start time for each rank
+    start_time_in_rank = []
+    for idx, row in enumerate(changed_rank_idxs):
+      start_time_in_rank.append(arr[row][2])
+
+    # Fill row
+    for idx in range(0,changed_rank_idxs[1]):
+      if idx == 0: continue # Skip first iterations
+
+      file_out.write(str(arr[idx][1]))
+
+      for idx2, val in enumerate(changed_rank_idxs):
+        #file_out.write(";" + str(arr[val + idx][2]))
+        timedelta = (arr[val + idx][2] - start_time_in_rank[idx2]).total_seconds()
+        file_out.write(";" + str(get_timedelta(timedelta)))
 
       file_out.write("\n")
 
@@ -304,6 +345,22 @@ elif program_mode == 'timediff': # All procesess with time diff
   file_out_name = file_name + "_timediff.csv"
 
   print("Compute time diff")
+  avg_timedelta_arr = compute_timediff(arr)
+
+  file_creator_csv(program_mode, file_out_name, arr)
+
+  print("Summary:")
+  print("   Start time: %s" % (start_time))
+  print("   End time: %s" % (last_time))
+  print("   Total time: %s (hour)" % ( format( ((last_time - start_time).total_seconds() / 3600.0) , '.2f' ) ))
+  print("   Average iter group time for each rank: %s" % (avg_timedelta_arr))
+
+elif program_mode == 'itertime': # Iters with time
+
+  file_name, file_ext = os.path.splitext(file_in_name)
+  file_out_name = file_name + "_itertime.csv"
+
+  print("Compute iters time")
   avg_timedelta_arr = compute_timediff(arr)
 
   file_creator_csv(program_mode, file_out_name, arr)

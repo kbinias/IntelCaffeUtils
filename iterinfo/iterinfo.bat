@@ -1,0 +1,3 @@
+iterinfo.py *.out
+
+pause
