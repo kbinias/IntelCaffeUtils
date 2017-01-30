@@ -1,7 +1,8 @@
-# Version 1.0
+# Version 1.1
 # krzysztof.binias@intel.com
 
 # Usage:
+# Use -l option with mpirun
 #  iterinfo.py intelcaffe_output.log
 #  iterinfo.py *.log
 
@@ -16,16 +17,21 @@ from datetime import datetime, date, time
 ######################################### Functions #############################################
 
 #I0702 16:44:35.539449 111918 solver.cpp:239] Iteration 90680, loss = 1.90332
+#[0] I0727 08:27:16.101341  1931 solver.cpp:241] [23] Iteration 72480, loss = 2.84437
+#[0] W1110 03:39:03.050876 53580 solver.cpp:304] [0] Iteration 360, loss = 10
 def prepare_line(line_str):
   line_str = line_str.replace(",", "")
   line_str = line_str.replace("=", "")
-  line_str = line_str.replace("I", str(datetime.now().year), 1)
+  line_str = line_str.replace("W", str(datetime.now().year), 1)
 
-  #[23] I0727 08:27:16.101341  1931 solver.cpp:241] [23] Iteration 72480, loss = 2.84437
+  # Exchange first I
+  if line_str.count('I') == 2:
+    line_str = line_str.replace("I", str(datetime.now().year), 1)
+
   # Remove first duplicated rank
-  if line_str.count('[') == 2:
-    endpos = line.find('I')
-    line_str = line_str[endpos:]
+  #if line_str.startswith('['):
+  #  endpos = line.find(']') + 1
+  #  line_str = line_str[endpos:]
 
   return line_str
 
@@ -147,7 +153,7 @@ def format_time(seconds, format='hms'):
   elif format == 'ms':
     return "%02d:%02d" % (m, s)
   elif format == 's':
-    return "%02d" % (s)
+    return "%02d" % (seconds)
 
   return "%d:%02d:%02d" % (h, m, s)
 
@@ -155,23 +161,27 @@ def format_time(seconds, format='hms'):
 def update_train_params_dict(train_params_dict, vals):
 
   if len(vals) == 0: return 1;
+  
+  base_idx = 1
 
-  if vals[0] == 'batch_size:' and train_params_dict.has_key('batch_size') == False:
-    train_params_dict['batch_size'] = vals[1]
-  elif vals[0] == 'momentum:' and train_params_dict.has_key('momentum') == False:
-    train_params_dict['momentum'] = vals[1]
-  elif vals[0] == 'base_lr:' and train_params_dict.has_key('base_lr') == False:
-    train_params_dict['base_lr'] = vals[1]
-  elif vals[0] == 'image_data_param' and train_params_dict.has_key('data_source') == False:
+  if vals[base_idx] == 'batch_size:' and train_params_dict.has_key('batch_size') == False:
+    train_params_dict['batch_size'] = vals[base_idx+1]
+  elif vals[base_idx] == 'max_iter:' and train_params_dict.has_key('max_iter') == False:
+    train_params_dict['max_iter'] = vals[base_idx+1]
+  elif vals[base_idx] == 'momentum:' and train_params_dict.has_key('momentum') == False:
+    train_params_dict['momentum'] = vals[base_idx+1]
+  elif vals[base_idx] == 'base_lr:' and train_params_dict.has_key('base_lr') == False:
+    train_params_dict['base_lr'] = vals[base_idx+1]
+  elif vals[base_idx] == 'image_data_param' and train_params_dict.has_key('data_source') == False:
     train_params_dict['data_source'] = 'image_data_param'
-  elif vals[0] == 'data_param' and train_params_dict.has_key('data_source') == False:
+  elif vals[base_idx] == 'data_param' and train_params_dict.has_key('data_source') == False:
     train_params_dict['data_source'] = 'data_param'
-  elif vals[0] == 'dummy_data_param' and train_params_dict.has_key('data_source') == False:
+  elif vals[base_idx] == 'dummy_data_param' and train_params_dict.has_key('data_source') == False:
     train_params_dict['data_source'] = 'dummy_data_param'
-  elif vals[0] == 'shuffle:' and train_params_dict.has_key('shuffle') == False:
-    train_params_dict['shuffle'] = vals[1]
-  elif vals[0] == 'engine:' and train_params_dict.has_key('engine') == False:
-    train_params_dict['engine'] = vals[1]
+  elif vals[base_idx] == 'shuffle:' and train_params_dict.has_key('shuffle') == False:
+    train_params_dict['shuffle'] = vals[base_idx+1]
+  elif vals[base_idx] == 'engine:' and train_params_dict.has_key('engine') == False:
+    train_params_dict['engine'] = vals[base_idx+1]
 
   return 0
 
@@ -206,10 +216,10 @@ for file_in_name in file_list:
       #[23] I0727 08:27:16.101341  1931 solver.cpp:241] [23] Iteration 72480, loss = 2.84437
       #I0722 01:18:31.942049 21188 solver.cpp:241] [3] Iteration 25720, loss = 11.0501
       #I0722 01:18:31.942049 21188 solver.cpp:241] Iteration 25720, loss = 11.0501
+      #[0] W1110 03:39:03.050876 53580 solver.cpp:304] [0] Iteration 360, loss = 10
       line = prepare_line(line)
 
       vals = line.split()
-      
       update_train_params_dict(train_params_dict, vals)
 
       if len(vals) < 8:
@@ -239,6 +249,9 @@ for file_in_name in file_list:
   # Iter step
   iter_step = arr[len(arr)-1][1] - arr[len(arr)-2][1]
 
+  # Last loss
+  last_loss = arr[len(arr)-1][3]
+
   # Compute iters time
   avg_timedelta_arr = compute_timediff(arr)
 
@@ -247,13 +260,17 @@ for file_in_name in file_list:
 
   formated_arr = []
   for idx, row in enumerate(avg_timedelta_arr):
-    formated_arr.append( format_time(row,'ms') )
+    formated_arr.append( format_time(row,'s') )
+
+  # Average iter time
+  aver_iter_time = sum(avg_timedelta_arr)/len(avg_timedelta_arr)
 
   print("------------------------------------------------------------------")
   print("File name: %s" % (file_in_name))
-  print("Train params: engine: %s, batch_size: %s, base_lr: %s, shuffle: %s, momentum: %s, data_source: %s" % (
+  print("Train params: engine: %s, batch_size: %s, max_iter: %s, base_lr: %s, shuffle: %s, momentum: %s, data_source: %s" % (
     get_val_from_dict(train_params_dict,'engine'), 
     get_val_from_dict(train_params_dict,'batch_size'), 
+    get_val_from_dict(train_params_dict,'max_iter'), 
     get_val_from_dict(train_params_dict,'base_lr'), 
     get_val_from_dict(train_params_dict,'shuffle'), 
     get_val_from_dict(train_params_dict,'momentum'), 
@@ -262,4 +279,10 @@ for file_in_name in file_list:
   print("End time: %s" % (last_time))
   print("Total time: %d:%02d:%02d" % (h, m, s))
   print("Ranks: %d, iter step: %d" % (len(formated_arr), iter_step))
-  print("Average time by ranks: %s" % (formated_arr))
+  print("Average iters time by ranks: %s" % (formated_arr))
+  print("Average iters time: %s" % (aver_iter_time))
+  estimate_learning_time_sec = aver_iter_time * (int(get_val_from_dict(train_params_dict,'max_iter'))/iter_step)
+  print("Estimate learning time: %s" % ( format_time( estimate_learning_time_sec ,'hms') ))
+  print("Last loss: %s" % ( last_loss ))
+  print("Last iter: %s" % ( arr[len(arr)-1][1] ))
+  
