@@ -1,4 +1,4 @@
-# Version 1.1
+# Version 1.2
 # krzysztof.binias@intel.com
 
 # Usage:
@@ -16,9 +16,8 @@ from datetime import datetime, date, time
 
 ######################################### Functions #############################################
 
-#I0702 16:44:35.539449 111918 solver.cpp:239] Iteration 90680, loss = 1.90332
-#[0] I0727 08:27:16.101341  1931 solver.cpp:241] [23] Iteration 72480, loss = 2.84437
-#[0] W1110 03:39:03.050876 53580 solver.cpp:304] [0] Iteration 360, loss = 10
+#I0201 01:36:31.795657 121166 sgd_solver.cpp:145] Iteration 0, lr = 0.08
+#[5] I0203 01:54:58.087530 94321 solver.cpp:316] Iteration 480, loss = 7.02164
 def prepare_line(line_str):
   line_str = line_str.replace(",", "")
   line_str = line_str.replace("=", "")
@@ -27,11 +26,6 @@ def prepare_line(line_str):
   # Exchange first I
   if line_str.count('I') == 2:
     line_str = line_str.replace("I", str(datetime.now().year), 1)
-
-  # Remove first duplicated rank
-  #if line_str.startswith('['):
-  #  endpos = line.find(']') + 1
-  #  line_str = line_str[endpos:]
 
   return line_str
 
@@ -73,10 +67,6 @@ def get_params(line, vals):
   start_idx = line.find('[')
 
   if start_idx == 0: #[0] I0719 07:09:31.850666 18289 solver.cpp:239] Iteration 6680 loss 6.40777
-    rank = find_between(line, '[', ']', start_idx)
-    iter = vals[6]
-    loss = vals[8]
-  elif start_idx > 0: #I0722 01:20:20.228528 165631 solver.cpp:241] [4] Iteration 25760 loss 11.0499
     rank = find_between(line, '[', ']', start_idx)
     iter = vals[6]
     loss = vals[8]
@@ -145,7 +135,6 @@ def explode_time(seconds):
   return h, m, s
 
 def format_time(seconds, format='hms'):
-  
   h, m, s = explode_time(seconds)
 
   if format == 'hms':
@@ -158,14 +147,17 @@ def format_time(seconds, format='hms'):
   return "%d:%02d:%02d" % (h, m, s)
 
 # Update net params dictionary
-def update_train_params_dict(train_params_dict, vals):
+def update_train_params_dict(multinode, train_params_dict, vals):
 
-  if len(vals) == 0: return 1;
-  
-  base_idx = 1
+  if len(vals) <= 1: return 1;
+
+  base_idx = 0
+  if multinode == True: base_idx = 1
 
   if vals[base_idx] == 'batch_size:' and train_params_dict.has_key('batch_size') == False:
     train_params_dict['batch_size'] = vals[base_idx+1]
+  elif vals[base_idx] == 'name:' and train_params_dict.has_key('name') == False: # Network name
+    train_params_dict['name'] = vals[base_idx+1]
   elif vals[base_idx] == 'max_iter:' and train_params_dict.has_key('max_iter') == False:
     train_params_dict['max_iter'] = vals[base_idx+1]
   elif vals[base_idx] == 'momentum:' and train_params_dict.has_key('momentum') == False:
@@ -200,6 +192,7 @@ file_list = glob.glob(file_in_name)
 
 for file_in_name in file_list:
 
+  multinode = False
   arr = []
 
   # Start reading data
@@ -212,15 +205,15 @@ for file_in_name in file_list:
   with open(file_in_name, "r") as file_in:
     for line in file_in:
 
-      #[0] I0719 07:09:31.850666 18289 solver.cpp:239] Iteration 6680, loss = 6.40777
-      #[23] I0727 08:27:16.101341  1931 solver.cpp:241] [23] Iteration 72480, loss = 2.84437
-      #I0722 01:18:31.942049 21188 solver.cpp:241] [3] Iteration 25720, loss = 11.0501
-      #I0722 01:18:31.942049 21188 solver.cpp:241] Iteration 25720, loss = 11.0501
-      #[0] W1110 03:39:03.050876 53580 solver.cpp:304] [0] Iteration 360, loss = 10
+      #I0201 01:36:31.795657 121166 sgd_solver.cpp:145] Iteration 0, lr = 0.08
+      #[5] I0203 01:54:58.087530 94321 solver.cpp:316] Iteration 480, loss = 7.02164
       line = prepare_line(line)
+      if(line.startswith('[', 0, 1)):
+        multinode = True
 
       vals = line.split()
-      update_train_params_dict(train_params_dict, vals)
+
+      update_train_params_dict(multinode, train_params_dict, vals)
 
       if len(vals) < 8:
         continue
@@ -238,8 +231,8 @@ for file_in_name in file_list:
       arr.append(arr_row)
 
   if len(arr) == 0:
-    print("ERROR: Array is empty")
-    exit()
+    print("Array is empty. No enough data to compute the statistics")
+    continue
 
   # Sort: Rank Time
   arr = sorted(arr, key=operator.itemgetter(0, 2))
@@ -262,11 +255,9 @@ for file_in_name in file_list:
   for idx, row in enumerate(avg_timedelta_arr):
     formated_arr.append( format_time(row,'s') )
 
-  # Average iter time
-  aver_iter_time = sum(avg_timedelta_arr)/len(avg_timedelta_arr)
-
   print("------------------------------------------------------------------")
   print("File name: %s" % (file_in_name))
+  print("Model name: %s" % train_params_dict['name'])
   print("Train params: engine: %s, batch_size: %s, max_iter: %s, base_lr: %s, shuffle: %s, momentum: %s, data_source: %s" % (
     get_val_from_dict(train_params_dict,'engine'), 
     get_val_from_dict(train_params_dict,'batch_size'), 
@@ -278,11 +269,17 @@ for file_in_name in file_list:
   print("Start time: %s" % (start_time))
   print("End time: %s" % (last_time))
   print("Total time: %d:%02d:%02d" % (h, m, s))
-  print("Ranks: %d, iter step: %d" % (len(formated_arr), iter_step))
-  print("Average iters time by ranks: %s" % (formated_arr))
-  print("Average iters time: %s" % (aver_iter_time))
-  estimate_learning_time_sec = aver_iter_time * (int(get_val_from_dict(train_params_dict,'max_iter'))/iter_step)
-  print("Estimate learning time: %s" % ( format_time( estimate_learning_time_sec ,'hms') ))
+
+  # Average iter time
+  if len(avg_timedelta_arr) == 0:
+    print("Average iter time is empty. No enough data to compute the statistics")
+  else:
+    if(multinode): print("Ranks: %d, iter step: %d" % (len(formated_arr), iter_step))
+    if(multinode): print("Average iters time by ranks: %s" % (formated_arr))
+    aver_iter_time = sum(avg_timedelta_arr)/len(avg_timedelta_arr)
+    print("Average iters time: %s" % (aver_iter_time))
+    estimate_learning_time_sec = aver_iter_time * (int(get_val_from_dict(train_params_dict,'max_iter'))/iter_step)
+    print("Estimate learning time: %s" % ( format_time( estimate_learning_time_sec ,'hms') ))
+
   print("Last loss: %s" % ( last_loss ))
   print("Last iter: %s" % ( arr[len(arr)-1][1] ))
-  
